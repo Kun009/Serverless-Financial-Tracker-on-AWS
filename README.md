@@ -45,8 +45,8 @@ The Personal Finance Tracker allows users to add, edit, and delete transactions.
   
 ### Lambda Function:
 + Deploy the Lambda function using your preferred method (AWS SAM, Serverless Framework, or via the AWS Console).
-+Set an environment variable finance_tracker if needed.
-+Ensure the Lambda function returns CORS headers.
++ Set an environment variable finance_tracker if needed.
++ Ensure the Lambda function returns CORS headers.
 
 ### API Gateway:
 + Create a new REST API in API Gateway.
