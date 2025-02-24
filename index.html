@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Personal Finance Tracker</title>
+  <!-- Google Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  />
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* Reset and base styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #f4f7f9;
+      color: #333;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+    header p {
+      font-size: 1.1rem;
+      color: #7f8c8d;
+    }
+    section {
+      margin-bottom: 40px;
+    }
+    /* Card and form styling */
+    .card {
+      background: #ecf0f1;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    form label {
+      font-weight: 500;
+      margin-bottom: 5px;
+      display: block;
+    }
+    form input,
+    form select {
+      padding: 10px;
+      border: 1px solid #bdc3c7;
+      border-radius: 4px;
+      width: 100%;
+    }
+    form button {
+      grid-column: span 2;
+      padding: 12px;
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    form button:hover {
+      background: #219150;
+    }
+    /* Hidden field */
+    #transactionId {
+      display: none;
+    }
+    /* Table styling */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th,
+    td {
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background: #2c3e50;
+      color: #fff;
+    }
+    tbody tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    tbody tr:hover {
+      background: #f1f1f1;
+    }
+    /* Dashboard chart styling */
+    .chart-container {
+      margin-bottom: 20px;
+      width: 100%;
+      height: 300px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    @media (max-width: 768px) {
+      form {
+        grid-template-columns: 1fr;
+      }
+      form button {
+        grid-column: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Personal Finance Tracker</h1>
+      <p>Track your income and expenses with ease</p>
+    </header>
+
+    <!-- Transaction Form -->
+    <section id="transaction-form">
+      <div class="card">
+        <h2>Add Transaction</h2>
+        <form id="form">
+          <!-- Hidden field for transaction id -->
+          <input type="hidden" id="transactionId" />
+          <div>
+            <label for="date">Date</label>
+            <input type="date" id="date" required />
+          </div>
+          <div>
+            <label for="description">Description</label>
+            <input type="text" id="description" placeholder="Salary, Groceries, etc." required />
+          </div>
+          <div>
+            <label for="category">Category</label>
+            <input type="text" id="category" placeholder="Food, Bills, etc." required />
+          </div>
+          <div>
+            <label for="amount">Amount</label>
+            <input type="number" id="amount" step="0.01" placeholder="0.00" required />
+          </div>
+          <div>
+            <label for="type">Type</label>
+            <select id="type" required>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+          </div>
+          <div style="align-self: end;">
+            <button type="submit">Submit Transaction</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Transactions Table -->
+    <section id="transactions">
+      <h2>Transactions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Amount</th>
+            <th>Type</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="transactionTableBody"></tbody>
+      </table>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dashboard">
+      <h2>Dashboard</h2>
+      <div class="chart-container">
+        <canvas id="monthlyChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="categoryChart"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let transactions = [];
+    let monthlyChart, categoryChart;
+    // API endpoint for the Lambda function
+    const API_URL = "https://dqea979pnf.execute-api.us-east-1.amazonaws.com/prod";
+
+    // Function to add a new transaction via API (POST)
+    async function addTransactionAPI(transaction) {
+      const response = await fetch(`${API_URL}/tracker`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transaction)
+      });
+      if (!response.ok) {
+        throw new Error("API error: " + response.statusText);
+      }
+      return await response.json();
+    }
+
+    // Function to update an existing transaction via API (PATCH)
+    async function updateTransactionAPI(transaction) {
+      const response = await fetch(`${API_URL}/tracker`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transaction)
+      });
+      if (!response.ok) {
+        throw new Error("API error: " + response.statusText);
+      }
+      return await response.json();
+    }
+
+    // Function to delete a transaction via API (DELETE)
+    async function deleteTransactionAPI(transactionId) {
+      const response = await fetch(`${API_URL}/tracker`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: transactionId })
+      });
+      if (!response.ok) {
+        throw new Error("API error: " + response.statusText);
+      }
+      return await response.json();
+    }
+
+    // Function to fetch all transactions via API (GET)
+    async function fetchTransactionsAPI() {
+      try {
+        const response = await fetch(`${API_URL}/tracker`, { method: "GET" });
+        if (!response.ok) {
+          throw new Error("API error: " + response.statusText);
+        }
+        const data = await response.json();
+        transactions = data;
+        updateTable();
+        updateCharts();
+      } catch (error) {
+        console.error("Error fetching transactions:", error);
+      }
+    }
+
+    // Update transaction table in the UI
+    function updateTable() {
+      const tbody = document.getElementById("transactionTableBody");
+      tbody.innerHTML = "";
+      transactions.forEach((t, index) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${t.date}</td>
+          <td>${t.description}</td>
+          <td>${t.category}</td>
+          <td>${t.amount.toFixed(2)}</td>
+          <td>${t.type}</td>
+          <td>
+            <button onclick="editTransaction(${index})">Edit</button>
+            <button onclick="removeTransaction(${index})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // Update charts based on transactions data
+    function updateCharts() {
+      // Compute monthly data for income and expense
+      const monthlyData = {};
+      transactions.forEach(t => {
+        const month = t.date.substring(0, 7);
+        if (!monthlyData[month]) {
+          monthlyData[month] = { income: 0, expense: 0 };
+        }
+        if (t.type === "income") {
+          monthlyData[month].income += t.amount;
+        } else if (t.type === "expense") {
+          monthlyData[month].expense += t.amount;
+        }
+      });
+      const months = Object.keys(monthlyData).sort();
+      const incomes = months.map(m => monthlyData[m].income);
+      const expenses = months.map(m => monthlyData[m].expense);
+
+      if (monthlyChart) monthlyChart.destroy();
+      const ctx1 = document.getElementById("monthlyChart").getContext("2d");
+      monthlyChart = new Chart(ctx1, {
+        type: "bar",
+        data: {
+          labels: months,
+          datasets: [
+            {
+              label: "Income",
+              data: incomes,
+              backgroundColor: "rgba(46, 204, 113, 0.6)" // green
+            },
+            {
+              label: "Expense",
+              data: expenses,
+              backgroundColor: "rgba(231, 76, 60, 0.6)" // red
+            }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Compute expense breakdown by category
+      const categoryData = {};
+      transactions.forEach(t => {
+        if (t.type === "expense") {
+          categoryData[t.category] = (categoryData[t.category] || 0) + t.amount;
+        }
+      });
+      const categories = Object.keys(categoryData);
+      const categoryAmounts = categories.map(c => categoryData[c]);
+
+      if (categoryChart) categoryChart.destroy();
+      const ctx2 = document.getElementById("categoryChart").getContext("2d");
+      categoryChart = new Chart(ctx2, {
+        type: "pie",
+        data: {
+          labels: categories,
+          datasets: [{
+            label: "Expenses by Category",
+            data: categoryAmounts,
+            backgroundColor: [
+              "rgba(231, 76, 60, 0.6)",
+              "rgba(52, 152, 219, 0.6)",
+              "rgba(241, 196, 15, 0.6)",
+              "rgba(155, 89, 182, 0.6)",
+              "rgba(52, 73, 94, 0.6)"
+            ]
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    // Handle form submission: check if editing or adding new
+    document.getElementById("form").addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const transaction = {
+        date: document.getElementById("date").value,
+        description: document.getElementById("description").value,
+        category: document.getElementById("category").value,
+        amount: parseFloat(document.getElementById("amount").value),
+        type: document.getElementById("type").value
+      };
+      // Check if we are editing an existing transaction
+      const transactionId = document.getElementById("transactionId").value;
+      try {
+        if (transactionId) {
+          // If editing, include the id and call update endpoint (PATCH)
+          transaction.id = transactionId;
+          const apiResult = await updateTransactionAPI(transaction);
+          console.log("Updated transaction:", apiResult);
+        } else {
+          // Otherwise, call the add endpoint (POST)
+          const apiResult = await addTransactionAPI(transaction);
+          console.log("Inserted transaction:", apiResult);
+        }
+        // After processing, re-fetch all transactions from the API
+        await fetchTransactionsAPI();
+        this.reset();
+        // Clear the hidden transaction id field
+        document.getElementById("transactionId").value = "";
+      } catch (error) {
+        console.error("Error processing transaction:", error);
+      }
+    });
+
+    // Remove transaction: call API DELETE and refresh UI
+    async function removeTransaction(index) {
+      try {
+        const transactionId = transactions[index].id;
+        await deleteTransactionAPI(transactionId);
+        // After deletion, re-fetch transactions from the API
+        await fetchTransactionsAPI();
+      } catch (error) {
+        console.error("Error deleting transaction:", error);
+      }
+    }
+
+    // Edit transaction: populate form fields with the selected transaction's data and set the hidden id
+    function editTransaction(index) {
+      const t = transactions[index];
+      document.getElementById("transactionId").value = t.id;
+      document.getElementById("date").value = t.date;
+      document.getElementById("description").value = t.description;
+      document.getElementById("category").value = t.category;
+      document.getElementById("amount").value = t.amount;
+      document.getElementById("type").value = t.type;
+    }
+
+    // On page load, fetch transactions from DynamoDB
+    window.addEventListener("load", fetchTransactionsAPI);
+  </script>
+</body>
+</html>
